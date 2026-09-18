@@ -1,5 +1,7 @@
 # Backend Challenge — Distributed Betting Operations (Go)
 
+🇧🇷 Também disponível em [português](README.pt-BR.md).
+
 Solution to the challenge described in [CHALLENGE.md](CHALLENGE.md). Design
 decisions, tradeoffs and known limitations are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md).
