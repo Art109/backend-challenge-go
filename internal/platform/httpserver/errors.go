@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"backend-challenge-go/internal/app"
@@ -25,7 +26,16 @@ func writeAppError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusServiceUnavailable, "TOO_MANY_CONFLICTS", err.Error())
 	case errors.Is(err, postgres.ErrWalletNotFound):
 		writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+	case postgres.IsUnavailable(err):
+		// Transient infrastructure failure (Postgres unreachable, dial/query
+		// timeout): 503, not 500 - it tells the caller retrying may help,
+		// which a generic 500 doesn't. The real error (which can contain a
+		// DSN, hostname, or internal path) is logged server-side only,
+		// never echoed back to the client.
+		slog.Error("transient_infrastructure_failure", "error", err)
+		writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "a dependency is temporarily unavailable; retry later")
 	default:
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		slog.Error("unhandled_internal_error", "error", err)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "an unexpected error occurred")
 	}
 }

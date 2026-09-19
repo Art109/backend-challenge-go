@@ -319,6 +319,32 @@ section); these are the infrastructure-adjacent ones verified by hand:
   visibility timeout) - confirmed by polling the DLQ's message count.
 - **Grafana dashboard**: confirmed rendering live data (not just
   provisioned-but-empty) after generating sample traffic - see §9.
+- **Postgres unavailability, mid-operation and recovery**: `docker compose
+  stop postgres` was run while the api container kept running. `GET
+  /health/live` stayed `UP` (the process itself is fine) while `GET
+  /health/ready` correctly flipped to `DOWN`/503. A bet submission during
+  the outage returned `503 SERVICE_UNAVAILABLE` with a generic message
+  (the real connection error - which names the DSN/hostname - was
+  confirmed to land only in the server-side log, never the HTTP response).
+  Postgres was then restarted with **no restart of the api process**:
+  `/health/ready` recovered on its own (`pgxpool` reconnects
+  transparently) and resubmitting the exact same request (same
+  Idempotency-Key) processed cleanly as a brand-new operation, at the
+  correct balance - proving the failed attempts left no partial or
+  corrupt state behind. This fixed a real gap found while testing it: the
+  error path previously returned a generic `500` with the raw internal
+  error text (including the Postgres DSN/hostname) in the response body;
+  `postgres.IsUnavailable` (checks for `*pgconn.ConnectError`, `net.Error`,
+  and `context.DeadlineExceeded`) now maps this specific case to `503`
+  with a safe message, satisfying the spec's requirement that transient
+  unavailability be distinguishable from other failures in the HTTP
+  contract. SQS unavailability doesn't have an equivalent HTTP-path test
+  because nothing in the HTTP request path calls SQS synchronously
+  (publishing happens only in the background outbox worker); the
+  consumer's and outbox worker's own resilience to a down SQS - log and
+  retry, never crash - is exercised implicitly every time LocalStack
+  finishes starting after them in `docker compose up`, and was watched
+  directly in the container logs during this same test window.
 
 ## 11. Known limitations / not implemented
 
