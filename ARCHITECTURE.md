@@ -247,9 +247,15 @@ Every component with a start/stop concern registers an `fx.Hook`:
 
 ## 9. Observability
 
-Structured JSON logs (`log/slog`) carry `correlationId`, method, path,
-status and duration on every HTTP request, and `messageId`/`transactionId`/
-`status` on SQS processing — never a credential or full financial payload.
+Structured JSON logs (`log/slog`) cover every identifier the spec names
+("correlationId, messageId, transactionId, walletId e providerId"), split
+across the layer where each is naturally available rather than forced into
+one line: `correlationId` + method/path/status/duration on every HTTP
+request; `messageId` + `transactionId` + status on SQS processing;
+`transactionId` + `walletId` + `providerId` + `kind` + `status` +
+`failureCode` on every `SubmitWagerTransaction` outcome (HTTP or SQS,
+new or replayed - one log call in `internal/app`, not duplicated per
+transport). Never a credential or full financial payload.
 
 Metrics are exposed at `GET /metrics` (Prometheus text format, public like
 the health checks — a scraper carries no bearer token, and the data is

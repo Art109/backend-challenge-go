@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,7 +72,7 @@ func (uc *UseCases) SubmitWagerTransaction(ctx context.Context, cmd SubmitWagerT
 	if result, isReplay, err := uc.tryReplay(ctx, cmd, payloadHash); err != nil {
 		return SubmitWagerTransactionResult{}, err
 	} else if isReplay {
-		recordResult(cmd.Kind, result)
+		recordResult(cmd, result)
 		return result, nil
 	}
 
@@ -95,13 +96,13 @@ func (uc *UseCases) SubmitWagerTransaction(ctx context.Context, cmd SubmitWagerT
 				return SubmitWagerTransactionResult{}, rErr
 			}
 			if isReplay {
-				recordResult(cmd.Kind, replay)
+				recordResult(cmd, replay)
 				return replay, nil
 			}
 			return SubmitWagerTransactionResult{}, err
 		default:
 			if err == nil {
-				recordResult(cmd.Kind, result)
+				recordResult(cmd, result)
 			}
 			return result, err
 		}
@@ -110,13 +111,26 @@ func (uc *UseCases) SubmitWagerTransaction(ctx context.Context, cmd SubmitWagerT
 }
 
 // recordResult covers the spec's "resultados por status" and "duplicatas"
-// metrics in one place, regardless of which of SubmitWagerTransaction's
-// several return points produced the result.
-func recordResult(kind wagertransaction.Kind, result SubmitWagerTransactionResult) {
-	metrics.TransactionsTotal.WithLabelValues(string(kind), string(result.Status)).Inc()
+// metrics, and the observability section's log line ("logs JSON com os
+// identificadores disponíveis para rastrear a operação: ... transactionId,
+// walletId e providerId"), in one place regardless of which of
+// SubmitWagerTransaction's several return points produced the result - so
+// every path (HTTP or SQS, new or replayed) gets exactly the same
+// treatment.
+func recordResult(cmd SubmitWagerTransactionCommand, result SubmitWagerTransactionResult) {
+	metrics.TransactionsTotal.WithLabelValues(string(cmd.Kind), string(result.Status)).Inc()
 	if result.IdempotentReplay {
 		metrics.IdempotentReplaysTotal.Inc()
 	}
+	slog.Info("wager_transaction_result",
+		"transactionId", result.TransactionID,
+		"walletId", cmd.WalletID,
+		"providerId", cmd.ProviderID,
+		"kind", cmd.Kind,
+		"status", result.Status,
+		"idempotentReplay", result.IdempotentReplay,
+		"failureCode", result.FailureCode,
+	)
 }
 
 func validateCommand(cmd SubmitWagerTransactionCommand) error {
