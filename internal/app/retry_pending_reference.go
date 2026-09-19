@@ -12,6 +12,7 @@ import (
 	"backend-challenge-go/internal/domain/events"
 	"backend-challenge-go/internal/domain/wagertransaction"
 	"backend-challenge-go/internal/domain/wallet"
+	"backend-challenge-go/internal/platform/metrics"
 )
 
 // maxReferenceRetryAttempts bounds how many times the reference-retry
@@ -82,7 +83,11 @@ func (uc *UseCases) RetryPendingReference(ctx context.Context, transactionID uui
 		if err := uc.txRepo.UpdateStatus(ctx, dbTx, retried, wagertransaction.StatusPendingReference); err != nil {
 			return err
 		}
-		return dbTx.Commit(ctx)
+		if err := dbTx.Commit(ctx); err != nil {
+			return err
+		}
+		metrics.ReferenceRetriesTotal.Inc()
+		return nil
 	}
 }
 

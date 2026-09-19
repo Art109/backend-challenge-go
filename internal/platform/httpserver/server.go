@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"backend-challenge-go/internal/app"
 	"backend-challenge-go/internal/config"
@@ -43,6 +44,10 @@ func NewRouter(uc *app.UseCases, pool *pgxpool.Pool, verifier *keycloak.Verifier
 	mux.HandleFunc("GET /providers/{providerId}/wagering/transactions/{externalTransactionId}", requireRole(verifier, RoleProvider, s.handleGetWagerTransactionByExternalID))
 	mux.HandleFunc("GET /health/live", s.handleLive)
 	mux.HandleFunc("GET /health/ready", s.handleReady)
+	// Public like the health checks: a Prometheus scraper has no bearer
+	// token, and the exposed data is aggregate counts/latencies only -
+	// never a financial payload or credential.
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	return withRequestLogging(mux)
 }

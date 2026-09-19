@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"backend-challenge-go/internal/domain/money"
+	"backend-challenge-go/internal/platform/metrics"
 	"backend-challenge-go/internal/platform/postgres"
 )
 
@@ -56,6 +57,10 @@ func (uc *UseCases) Reconcile(ctx context.Context, walletID uuid.UUID) (Reconcil
 
 	if err := tx.Commit(ctx); err != nil {
 		return ReconciliationResult{}, fmt.Errorf("app: commit reconciliation tx: %w", err)
+	}
+
+	if !diff.IsZero() {
+		metrics.ReconciliationDivergencesTotal.Inc()
 	}
 
 	return ReconciliationResult{

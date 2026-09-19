@@ -127,6 +127,9 @@ curl -s -X POST http://localhost:8080/wallets/$WALLET_ID/reconciliation -H "Auth
 # Health checks (sem autenticação)
 curl -s http://localhost:8080/health/live
 curl -s http://localhost:8080/health/ready
+
+# Métricas do Prometheus (sem autenticação)
+curl -s http://localhost:8080/metrics
 ```
 
 Enviando uma mensagem diretamente pra fila de entrada (simulando uma
@@ -196,7 +199,7 @@ Esses testes cobrem, entre outras coisas:
 
 Autenticação, comportamento real de consumo/DLQ via SQS, e recuperação após
 reinício com múltiplas instâncias foram verificados manualmente contra a
-stack completa do `docker compose up` (veja ARCHITECTURE.md §9 para o que
+stack completa do `docker compose up` (veja ARCHITECTURE.md §10 para o que
 ainda não está capturado como casos automatizados de `go test`).
 
 ## Formatação

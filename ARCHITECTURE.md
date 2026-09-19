@@ -245,13 +245,36 @@ Every component with a start/stop concern registers an `fx.Hook`:
   SQS visibility timeout running out on its own — no special "release"
   call needed, redelivery to another instance is the natural outcome.
 
-## 9. Known limitations / not implemented
+## 9. Observability
 
-- **Metrics**: only structured JSON logs (`log/slog`) exist
-  (`correlationId`, method, path, status, duration on every HTTP request;
-  `messageId`/`transactionId`/`status` on SQS processing). No
-  counters/histograms (e.g. Prometheus) were wired up — this is the
-  clearest gap against the spec's observability section.
+Structured JSON logs (`log/slog`) carry `correlationId`, method, path,
+status and duration on every HTTP request, and `messageId`/`transactionId`/
+`status` on SQS processing — never a credential or full financial payload.
+
+Metrics are exposed at `GET /metrics` (Prometheus text format, public like
+the health checks — a scraper carries no bearer token, and the data is
+aggregate counts/latencies, never a financial payload) via
+`internal/platform/metrics`, one package-level collector per concern so any
+layer can record without threading a metrics client through every
+constructor:
+
+| Metric | Spec requirement it covers |
+| --- | --- |
+| `wager_transactions_total{kind,status}` | "resultados por status" |
+| `wager_idempotent_replays_total` | "duplicatas" |
+| `wallet_version_conflicts_total` | "conflitos de concorrência" |
+| `reference_retries_total` | "retries" (REFUND/ROLLBACK backoff) |
+| `sqs_messages_total{outcome}` | the "DLQ" half — this process never publishes to the DLQ itself (SQS's redrive policy does that after `maxReceiveCount`), so `business_rejected`/`transient_failure` counts are the closest first-party signal for messages trending toward it |
+| `outbox_publish_attempts_total{outcome}` / `outbox_publish_delay_seconds` | "atraso da outbox" |
+| `http_request_duration_seconds{method,path,status}` | "latência de processamento" |
+| `reconciliation_divergences_total` | "divergências de reconciliação" |
+
+`path` labels normalize UUID segments to `{id}` (e.g.
+`/wallets/{id}/ledger`) before labeling, so the cardinality stays bounded by
+route count rather than growing with every wallet ever requested.
+
+## 10. Known limitations / not implemented
+
 - **Tracing**: not implemented (explicitly an optional differentiator per
   the spec).
 - **Double-entry ledger**: not implemented (explicitly optional).

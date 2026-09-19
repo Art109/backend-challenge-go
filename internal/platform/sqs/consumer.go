@@ -16,6 +16,7 @@ import (
 	"backend-challenge-go/internal/app"
 	"backend-challenge-go/internal/domain/money"
 	"backend-challenge-go/internal/domain/wagertransaction"
+	"backend-challenge-go/internal/platform/metrics"
 )
 
 // ConsumerName is this consumer's durable identity for inbox dedup - it
@@ -115,6 +116,7 @@ func (c *Consumer) handle(ctx context.Context, msg types.Message) {
 		// it (by not deleting it here; the queue's redrive policy moves it
 		// after maxReceiveCount) is correct, but we also don't want it
 		// silently stuck: log it clearly.
+		metrics.SQSMessagesTotal.WithLabelValues("business_rejected").Inc()
 		slog.Error("sqs_message_invalid_json", "error", err, "messageId", aws.ToString(msg.MessageId))
 		return
 	}
@@ -122,6 +124,7 @@ func (c *Consumer) handle(ctx context.Context, msg types.Message) {
 	playerID, err1 := uuid.Parse(env.Data.PlayerID)
 	walletID, err2 := uuid.Parse(env.Data.WalletID)
 	if err1 != nil || err2 != nil {
+		metrics.SQSMessagesTotal.WithLabelValues("business_rejected").Inc()
 		slog.Error("sqs_message_invalid_ids", "messageId", env.MessageID)
 		return
 	}
@@ -145,14 +148,17 @@ func (c *Consumer) handle(ctx context.Context, msg types.Message) {
 			// A malformed request body: like the JSON-parse case above,
 			// retrying changes nothing. Let it dead-letter via
 			// maxReceiveCount rather than deleting it ourselves.
+			metrics.SQSMessagesTotal.WithLabelValues("business_rejected").Inc()
 			slog.Error("sqs_message_rejected", "error", err, "messageId", env.MessageID)
 			return
 		}
 		// Transient failure (DB unreachable, etc.): don't delete - leave
 		// it for redelivery once visibility expires.
+		metrics.SQSMessagesTotal.WithLabelValues("transient_failure").Inc()
 		slog.Error("sqs_message_transient_failure", "error", err, "messageId", env.MessageID)
 		return
 	}
+	metrics.SQSMessagesTotal.WithLabelValues("processed").Inc()
 
 	slog.Info("sqs_message_processed",
 		"messageId", env.MessageID,

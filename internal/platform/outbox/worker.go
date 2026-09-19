@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"backend-challenge-go/internal/platform/metrics"
 	"backend-challenge-go/internal/platform/postgres"
 	"backend-challenge-go/internal/platform/sqs"
 )
@@ -91,18 +92,22 @@ func (w *Worker) publishBatch(ctx context.Context) (int, error) {
 	}
 
 	for _, row := range rows {
+		publishedAt := time.Now().UTC()
 		err := w.publisher.Publish(ctx, row.AggregateID.String(), row.EventID.String(), string(row.Payload))
 		if err != nil {
 			attempts := row.Attempts + 1
+			metrics.OutboxPublishTotal.WithLabelValues("failure").Inc()
 			slog.Warn("outbox_publish_failed", "eventId", row.EventID, "attempts", attempts, "error", err)
 			if err := w.repo.ScheduleRetry(ctx, tx, row.EventID, attempts, time.Now().UTC().Add(backoff(attempts))); err != nil {
 				return 0, err
 			}
 			continue
 		}
-		if err := w.repo.MarkPublished(ctx, tx, row.EventID, time.Now().UTC()); err != nil {
+		if err := w.repo.MarkPublished(ctx, tx, row.EventID, publishedAt); err != nil {
 			return 0, err
 		}
+		metrics.OutboxPublishTotal.WithLabelValues("success").Inc()
+		metrics.OutboxDelaySeconds.Observe(publishedAt.Sub(row.OccurredAt).Seconds())
 	}
 
 	if err := tx.Commit(ctx); err != nil {

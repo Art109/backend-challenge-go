@@ -13,6 +13,7 @@ import (
 	"backend-challenge-go/internal/domain/money"
 	"backend-challenge-go/internal/domain/wagertransaction"
 	"backend-challenge-go/internal/domain/wallet"
+	"backend-challenge-go/internal/platform/metrics"
 	"backend-challenge-go/internal/platform/postgres"
 )
 
@@ -70,6 +71,7 @@ func (uc *UseCases) SubmitWagerTransaction(ctx context.Context, cmd SubmitWagerT
 	if result, isReplay, err := uc.tryReplay(ctx, cmd, payloadHash); err != nil {
 		return SubmitWagerTransactionResult{}, err
 	} else if isReplay {
+		recordResult(cmd.Kind, result)
 		return result, nil
 	}
 
@@ -77,6 +79,7 @@ func (uc *UseCases) SubmitWagerTransaction(ctx context.Context, cmd SubmitWagerT
 		result, err := uc.submitOnce(ctx, cmd, payloadHash)
 		switch {
 		case errors.Is(err, postgres.ErrVersionConflict):
+			metrics.VersionConflictsTotal.Inc()
 			continue // another writer committed first; re-read and retry
 		case errors.Is(err, postgres.ErrIdempotencyConflict), errors.Is(err, postgres.ErrDuplicateMessage):
 			// Either a concurrent identical submission won the race to
@@ -92,14 +95,28 @@ func (uc *UseCases) SubmitWagerTransaction(ctx context.Context, cmd SubmitWagerT
 				return SubmitWagerTransactionResult{}, rErr
 			}
 			if isReplay {
+				recordResult(cmd.Kind, replay)
 				return replay, nil
 			}
 			return SubmitWagerTransactionResult{}, err
 		default:
+			if err == nil {
+				recordResult(cmd.Kind, result)
+			}
 			return result, err
 		}
 	}
 	return SubmitWagerTransactionResult{}, ErrTooManyConflicts
+}
+
+// recordResult covers the spec's "resultados por status" and "duplicatas"
+// metrics in one place, regardless of which of SubmitWagerTransaction's
+// several return points produced the result.
+func recordResult(kind wagertransaction.Kind, result SubmitWagerTransactionResult) {
+	metrics.TransactionsTotal.WithLabelValues(string(kind), string(result.Status)).Inc()
+	if result.IdempotentReplay {
+		metrics.IdempotentReplaysTotal.Inc()
+	}
 }
 
 func validateCommand(cmd SubmitWagerTransactionCommand) error {
