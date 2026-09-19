@@ -48,7 +48,7 @@ deliberate: the `wager_transactions` row is inserted **before** its
 `wallet_ledger_entries` row, because `wallet_ledger_entries.transaction_id`
 has a foreign key that Postgres checks at `INSERT` time, not deferred to
 `COMMIT`. Getting this backwards was an actual bug caught while building
-this (see the "Bugs found while building this" section).
+this - see §12 for this and the other bugs found along the way.
 
 ## 3. Idempotency
 
@@ -364,3 +364,33 @@ section); these are the infrastructure-adjacent ones verified by hand:
 - **Currency scope**: only BRL is exercised end-to-end; the type system
   supports any ISO 4217 code and currency-mismatch is tested, but no
   multi-currency wallet scenario was built.
+
+## 12. Bugs found while building this
+
+Four application-level bugs were found and fixed during development -
+each is explained in full where it's contextually relevant (linked
+below); this section is just the consolidated list. (Environment/tooling
+friction - WSL, MinGW, the Keycloak hostname gotcha - is a separate
+concern, covered in each README's "Troubleshooting" section instead,
+since it's about reproducing the dev machine, not about the application's
+own correctness.)
+
+1. **Ledger entry inserted before its transaction row (§2)**: violated a
+   foreign key that Postgres checks at `INSERT` time, not at `COMMIT`.
+   Fixed by inserting the `wager_transactions` row first.
+2. **Idempotency lookup race under heavy concurrency (§3)**: two
+   sequential, non-atomic reads (by key, then by external id) could
+   observe the winner's row committing in between them, misclassifying a
+   late-observed replay as a "reused under a different key" conflict.
+   Fixed by checking the found row's actual idempotency key before
+   deciding it's a real conflict.
+3. **Outbox events missing their envelope (§6)**: `events.Envelope` had no
+   JSON tags and only `env.Data` was persisted, so messages published to
+   SQS were missing `eventId`/`eventType`/`aggregateId`/`correlationId`/
+   `version` entirely. Fixed by tagging `Envelope` and marshaling the
+   whole struct.
+4. **Transient Postgres unavailability returned a generic 500 with leaked
+   internal detail (§10)**: found by deliberately stopping the `postgres`
+   container while the API was serving traffic. Fixed with
+   `postgres.IsUnavailable` mapping connection-level failures to `503`
+   with a safe message, logging the real error server-side only.
