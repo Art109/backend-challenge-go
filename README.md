@@ -214,6 +214,37 @@ recovery were verified manually against the full `docker compose up`
 stack (see ARCHITECTURE.md §11 for what isn't yet captured as automated
 `go test` cases).
 
+## Troubleshooting (environment setup)
+
+Issues hit while setting up the dev environment for this project - kept
+here in case they help on another machine. These are environment/tooling
+friction, not application bugs (those are in ARCHITECTURE.md §5).
+
+- **`wsl --install` fails / hangs on Windows (e.g. IoT/LTSC editions
+  without Microsoft Store access)**: the modern installer fetches the WSL
+  package from the Store. If that's unavailable, sideload it instead:
+  download the latest `.msixbundle` from the
+  [microsoft/WSL releases](https://github.com/microsoft/WSL/releases) and
+  install it with `Add-AppxPackage -Path <file>.msixbundle` (after
+  enabling the `Microsoft-Windows-Subsystem-Linux` and
+  `VirtualMachinePlatform` Windows features and rebooting).
+- **`go test -race` fails with `-race requires cgo; enable cgo by setting
+  CGO_ENABLED=1` even after setting that env var**: `-race` needs an
+  actual C compiler, not just the env var. On Windows, install MinGW-w64
+  (e.g. `choco install mingw`) and make sure its `bin` directory (e.g.
+  `C:\ProgramData\mingw64\mingw64\bin`) is on `PATH`. On Linux, install
+  `build-essential` (or your distro's equivalent); on macOS, Xcode Command
+  Line Tools.
+- **Keycloak token issuer mismatch (`401 INVALID_CREDENTIALS`) when the
+  API and a human/test client reach Keycloak through different
+  addresses**: see the "Auth gotcha" note above - setting only
+  `KC_HOSTNAME_PORT` did not work in testing (Keycloak's hostname-v2
+  provider kept echoing back whatever port the request actually arrived
+  on); pinning `KC_HOSTNAME` to the **full URL**
+  (`http://keycloak:8080`) was what actually made every issued token's
+  `iss` claim consistent regardless of which exposed port was used to
+  request it.
+
 ## Formatting
 
 ```sh

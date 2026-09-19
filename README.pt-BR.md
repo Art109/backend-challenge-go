@@ -219,6 +219,37 @@ reinício com múltiplas instâncias foram verificados manualmente contra a
 stack completa do `docker compose up` (veja ARCHITECTURE.md §11 para o que
 ainda não está capturado como casos automatizados de `go test`).
 
+## Troubleshooting (configuração do ambiente)
+
+Problemas encontrados ao configurar o ambiente de desenvolvimento deste
+projeto — mantidos aqui caso ajudem em outra máquina. São perrengues de
+ambiente/ferramental, não bugs da aplicação (esses estão no
+ARCHITECTURE.md §5).
+
+- **`wsl --install` falha ou trava no Windows (ex: edições IoT/LTSC sem
+  acesso à Microsoft Store)**: o instalador moderno busca o pacote do WSL
+  pela Store. Se ela não estiver disponível, instale manualmente:
+  baixe o `.msixbundle` mais recente das
+  [releases do microsoft/WSL](https://github.com/microsoft/WSL/releases)
+  e instale com `Add-AppxPackage -Path <arquivo>.msixbundle` (depois de
+  habilitar os recursos do Windows `Microsoft-Windows-Subsystem-Linux` e
+  `VirtualMachinePlatform` e reiniciar).
+- **`go test -race` falha com `-race requires cgo; enable cgo by setting
+  CGO_ENABLED=1` mesmo depois de definir essa variável**: o `-race` precisa
+  de um compilador C de verdade, não só da variável de ambiente. No
+  Windows, instale o MinGW-w64 (ex: `choco install mingw`) e garanta que a
+  pasta `bin` dele (ex: `C:\ProgramData\mingw64\mingw64\bin`) esteja no
+  `PATH`. No Linux, instale o `build-essential` (ou equivalente da sua
+  distro); no macOS, as Xcode Command Line Tools.
+- **Emissor do token do Keycloak não bate (`401 INVALID_CREDENTIALS`)
+  quando a API e um cliente humano/de teste acessam o Keycloak por
+  endereços diferentes**: veja a nota "Pegadinha de autenticação" acima —
+  configurar só o `KC_HOSTNAME_PORT` não funcionou nos testes (o provedor
+  de hostname v2 do Keycloak continuava ecoando a porta que a requisição
+  realmente usou); fixar o `KC_HOSTNAME` como uma **URL completa**
+  (`http://keycloak:8080`) foi o que realmente deixou o `iss` de todo
+  token consistente, não importa qual porta exposta foi usada pra pedi-lo.
+
 ## Formatação
 
 ```sh
