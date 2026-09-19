@@ -26,6 +26,9 @@ LocalStack (com as filas abaixo provisionadas automaticamente), e por fim a
 própria API, que roda suas próprias migrations do banco na inicialização.
 
 A API fica disponível em `http://localhost:8080` (pode ser trocado com `API_PORT`).
+O Prometheus fica em `http://localhost:9090`, e um dashboard do Grafana já
+pronto fica em `http://localhost:3000` (acesso livre pra visualizar; login
+`admin`/`admin` pra editar) — veja "Dashboard" abaixo.
 
 ## Variáveis de ambiente
 
@@ -165,6 +168,20 @@ dentro do container com `docker compose exec localstack awslocal ...`, ou
 use a CLI `aws` normal com `--endpoint-url http://localhost:4566` e
 credenciais fictícias.)
 
+## Dashboard (diferencial opcional)
+
+O `docker compose up --build` também sobe o Prometheus (coletando
+`api:8080/metrics` a cada 5s) e o Grafana, com um dashboard já provisionado
+— sem nenhuma configuração manual. Abra `http://localhost:3000` e vá em
+**Dashboards → Backend Challenge — Betting Operations**, ou direto:
+`http://localhost:3000/d/backend-challenge-overview`. Ele cobre as 8
+métricas da seção de observabilidade: transações por status/tipo, replays
+idempotentes, conflitos de versão, retries de referência, divergências de
+reconciliação, resultados do SQS, resultados do outbox, e tanto o atraso
+do outbox quanto a latência HTTP em p50/p95. Nenhum dos dois serviços é
+necessário pro resto da stack funcionar — removê-los do
+`docker-compose.yml` não afeta `api`/`postgres`/`keycloak`/`localstack`.
+
 ## Rodando os testes
 
 ```sh
@@ -199,7 +216,7 @@ Esses testes cobrem, entre outras coisas:
 
 Autenticação, comportamento real de consumo/DLQ via SQS, e recuperação após
 reinício com múltiplas instâncias foram verificados manualmente contra a
-stack completa do `docker compose up` (veja ARCHITECTURE.md §10 para o que
+stack completa do `docker compose up` (veja ARCHITECTURE.md §11 para o que
 ainda não está capturado como casos automatizados de `go test`).
 
 ## Formatação

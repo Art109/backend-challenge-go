@@ -273,21 +273,62 @@ constructor:
 `/wallets/{id}/ledger`) before labeling, so the cardinality stays bounded by
 route count rather than growing with every wallet ever requested.
 
-## 10. Known limitations / not implemented
+**Dashboard (optional differentiator):** the spec explicitly names
+dashboards as an optional extra ("dashboards são diferenciais opcionais",
+§12), so `prometheus` and `grafana` services were added on top of the
+metrics above - never required for `api`/`postgres`/`keycloak`/`localstack`
+to work, purely additive. Prometheus scrapes `api:8080/metrics` every 5s
+(`deploy/prometheus/prometheus.yml`); Grafana auto-provisions a
+datasource pointing at it and a ready-made dashboard
+(`deploy/grafana/dashboards/backend-challenge.json`) with one panel per
+metric above, available at `http://localhost:3000` (anonymous viewer
+access enabled locally - no login needed to look, `admin`/`admin` to edit).
+
+## 10. Manually verified against the live stack
+
+These scenarios were exercised against the real `docker compose` stack
+(not mocked) but are not yet captured as automated `go test` cases - the
+domain, persistence, and application-layer concurrency/idempotency
+scenarios *are* covered by automated integration tests (see README's test
+section); these are the infrastructure-adjacent ones verified by hand:
+
+- **Graceful shutdown (SIGTERM)**: `docker compose stop api` was observed
+  to stop, in order, the reference-retry worker, the outbox publisher, the
+  SQS consumer, then the HTTP server, then the Postgres pool - exactly the
+  reverse-registration order documented in §8, with zero errors, in under
+  one second.
+- **Abrupt termination + restart recovery**: a REFUND was submitted
+  referencing a BET that didn't exist yet (persisted as
+  `PENDING_REFERENCE`); the API process was then killed with `docker kill`
+  (SIGKILL, no graceful shutdown at all) and restarted; the missing BET was
+  submitted; the reference-retry worker **in the new process** picked up
+  the pending row from the database within one tick (5s) and resolved the
+  REFUND to `PROCESSED` with the correct balance - proving the retry state
+  is durable, not in-memory, and survives a crash mid-flow.
+- **SQS redelivery → DLQ**: a message with an unparsable `playerId` was
+  sent to `wager-transactions.fifo`; it was redelivered and rejected
+  exactly 5 times (`sqs_messages_total{outcome="business_rejected"}` read
+  5 after the fact), then LocalStack's redrive policy moved it to
+  `wager-transactions-dlq.fifo` automatically, ~150s later (5 × the 30s
+  visibility timeout) - confirmed by polling the DLQ's message count.
+- **Grafana dashboard**: confirmed rendering live data (not just
+  provisioned-but-empty) after generating sample traffic - see §9.
+
+## 11. Known limitations / not implemented
 
 - **Tracing**: not implemented (explicitly an optional differentiator per
   the spec).
 - **Double-entry ledger**: not implemented (explicitly optional).
 - **Load testing**: not implemented (explicitly optional, no minimum RPS
   required).
-- **Automated tests for auth, SQS redelivery/DLQ, and multi-instance
-  restart recovery**: these were verified by hand against the real
-  docker-compose stack (documented in the project's development history)
-  but are not yet captured as `go test` cases — the domain, persistence,
-  and application-layer concurrency/idempotency scenarios *are* covered by
-  automated integration tests (see README's test section); the
-  infrastructure-adjacent scenarios above are the main remaining test-
-  coverage gap.
+- **"At least three independent processes" (§8)**: the automated
+  concurrency tests use goroutines with independent `pgxpool.Pool`
+  connections (their own connections and memory, racing for real against
+  Postgres) rather than three literal separate OS processes. Postgres
+  cannot tell the difference - the guarantee it enforces (the `version`
+  column's compare-and-swap) is identical either way - but this is a
+  literal reading of "processos independentes" the current test suite
+  doesn't satisfy verbatim.
 - **Currency scope**: only BRL is exercised end-to-end; the type system
   supports any ISO 4217 code and currency-mismatch is tested, but no
   multi-currency wallet scenario was built.

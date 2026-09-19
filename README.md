@@ -26,6 +26,9 @@ PostgreSQL, Keycloak (with the realm below auto-imported), LocalStack
 its own database migrations on startup.
 
 The API listens on `http://localhost:8080` (override with `API_PORT`).
+Prometheus is at `http://localhost:9090`, and a ready-made Grafana
+dashboard is at `http://localhost:3000` (open access for viewing; sign in
+with `admin`/`admin` to edit) — see "Dashboard" below.
 
 ## Environment variables
 
@@ -162,6 +165,20 @@ the container with `docker compose exec localstack awslocal ...`, or use
 the plain `aws` CLI with `--endpoint-url http://localhost:4566` and dummy
 credentials.)
 
+## Dashboard (optional differentiator)
+
+`docker compose up --build` also starts Prometheus (scraping `api:8080/metrics`
+every 5s) and Grafana, with a dashboard already provisioned — no manual
+setup needed. Open `http://localhost:3000` and go to
+**Dashboards → Backend Challenge — Betting Operations**, or directly:
+`http://localhost:3000/d/backend-challenge-overview`. It covers all 8
+metrics from the observability section: transactions by status/kind,
+idempotent replays, version conflicts, reference retries, reconciliation
+divergences, SQS outcomes, outbox publish outcomes, and both outbox delay
+and HTTP latency as p50/p95. Neither service is required for the rest of
+the stack to work — removing them from docker-compose.yml doesn't affect
+`api`/`postgres`/`keycloak`/`localstack` at all.
+
 ## Running the tests
 
 ```sh
@@ -194,7 +211,7 @@ These cover, among others:
 
 Auth, live SQS consumption/DLQ behavior, and multi-instance restart
 recovery were verified manually against the full `docker compose up`
-stack (see ARCHITECTURE.md §10 for what isn't yet captured as automated
+stack (see ARCHITECTURE.md §11 for what isn't yet captured as automated
 `go test` cases).
 
 ## Formatting
