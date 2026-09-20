@@ -281,7 +281,7 @@ route count rather than growing with every wallet ever requested.
 
 **Dashboard (optional differentiator):** the spec explicitly names
 dashboards as an optional extra ("dashboards são diferenciais opcionais",
-§12), so `prometheus` and `grafana` services were added on top of the
+CHALLENGE.md §12), so `prometheus` and `grafana` services were added on top of the
 metrics above - never required for `api`/`postgres`/`keycloak`/`localstack`
 to work, purely additive. Prometheus scrapes `api:8080/metrics` every 5s
 (`deploy/prometheus/prometheus.yml`); Grafana auto-provisions a
@@ -345,6 +345,19 @@ section); these are the infrastructure-adjacent ones verified by hand:
   retry, never crash - is exercised implicitly every time LocalStack
   finishes starting after them in `docker compose up`, and was watched
   directly in the container logs during this same test window.
+- **The same operation crossing HTTP and SQS**: a BET was submitted over
+  HTTP with `Idempotency-Key: provider-a:cross-channel-1` and processed
+  normally. The identical operation (same `providerId` +
+  `externalTransactionId` + `idempotencyKey` + payload) was then sent a
+  second time, this time as a raw SQS message to `wager-transactions.fifo`
+  instead of an HTTP request. The consumer logged
+  `idempotentReplay=true` against the **same** `transactionId` the HTTP
+  call had produced, the wallet balance was unchanged, and the ledger
+  still held exactly one debit for it - confirming the two entry points
+  genuinely share one idempotency/financial guarantee (they call the same
+  `app.UseCases.SubmitWagerTransaction`, per `internal/platform/sqs/consumer.go`)
+  rather than each keeping its own bookkeeping that happens to agree only
+  in the untested happy path.
 
 ## 11. Known limitations / not implemented
 

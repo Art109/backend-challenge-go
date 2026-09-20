@@ -224,7 +224,7 @@ ainda não está capturado como casos automatizados de `go test`).
 Problemas encontrados ao configurar o ambiente de desenvolvimento deste
 projeto — mantidos aqui caso ajudem em outra máquina. São perrengues de
 ambiente/ferramental, não bugs da aplicação (esses estão no
-ARCHITECTURE.md §5).
+ARCHITECTURE.md §12).
 
 - **`wsl --install` falha ou trava no Windows (ex: edições IoT/LTSC sem
   acesso à Microsoft Store)**: o instalador moderno busca o pacote do WSL

@@ -218,7 +218,7 @@ stack (see ARCHITECTURE.md §11 for what isn't yet captured as automated
 
 Issues hit while setting up the dev environment for this project - kept
 here in case they help on another machine. These are environment/tooling
-friction, not application bugs (those are in ARCHITECTURE.md §5).
+friction, not application bugs (those are in ARCHITECTURE.md §12).
 
 - **`wsl --install` fails / hangs on Windows (e.g. IoT/LTSC editions
   without Microsoft Store access)**: the modern installer fetches the WSL
